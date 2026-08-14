@@ -9,7 +9,7 @@
 
 using namespace std;
 
-const int BUCKETS = 1000003;
+const int BUCKETS = 10000003;
 const char* INDEX_FILE = "index.bin";
 const char* DATA_FILE = "data.bin";
 
