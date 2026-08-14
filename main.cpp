@@ -9,7 +9,7 @@
 
 using namespace std;
 
-const int BUCKETS = 1000003; // Reset to a reasonable number
+const int BUCKETS = 1000003;
 const char* INDEX_FILE = "index.bin";
 const char* DATA_FILE = "data.bin";
 
@@ -113,17 +113,34 @@ int main() {
             fread(&head, sizeof(int), 1, idx_fp);
 
             int current_offset = head;
+            int prev_offset = -1;
             while (current_offset != -1) {
                 fseek(dat_fp, current_offset, SEEK_SET);
                 Entry e;
                 fread(&e, sizeof(Entry), 1, dat_fp);
                 if (!e.deleted && strcmp(e.index, index.c_str()) == 0 && e.value == value) {
+                    // Remove from chain
+                    if (prev_offset == -1) {
+                        int next_head = e.next_offset;
+                        fseek(idx_fp, h * sizeof(int), SEEK_SET);
+                        fwrite(&next_head, sizeof(int), 1, idx_fp);
+                        fflush(idx_fp);
+                    } else {
+                        Entry prev_e;
+                        fseek(dat_fp, prev_offset, SEEK_SET);
+                        fread(&prev_e, sizeof(Entry), 1, dat_fp);
+                        prev_e.next_offset = e.next_offset;
+                        fseek(dat_fp, prev_offset, SEEK_SET);
+                        fwrite(&prev_e, sizeof(Entry), 1, dat_fp);
+                        fflush(dat_fp);
+                    }
                     e.deleted = true;
                     fseek(dat_fp, current_offset, SEEK_SET);
                     fwrite(&e, sizeof(Entry), 1, dat_fp);
                     fflush(dat_fp);
                     break;
                 }
+                prev_offset = current_offset;
                 current_offset = e.next_offset;
             }
         } else if (cmd == "find") {
