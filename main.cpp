@@ -9,7 +9,7 @@
 
 using namespace std;
 
-const int BUCKETS = 10000003;
+const int BUCKETS = 1000003; // Reset to a reasonable number
 const char* INDEX_FILE = "index.bin";
 const char* DATA_FILE = "data.bin";
 
@@ -20,13 +20,13 @@ struct Entry {
     bool deleted;
 };
 
-// Use a better hash function
 unsigned int hash_fn(const string& s) {
-    unsigned long hash = 5381;
+    unsigned int hash = 2166136261u;
     for (char c : s) {
-        hash = ((hash << 5) + hash) + (unsigned char)c;
+        hash ^= (unsigned char)c;
+        hash *= 16777619u;
     }
-    return (unsigned int)(hash % BUCKETS);
+    return hash % BUCKETS;
 }
 
 bool file_exists(const char* filename) {
