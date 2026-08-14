@@ -20,12 +20,13 @@ struct Entry {
     bool deleted;
 };
 
+// Use a better hash function
 unsigned int hash_fn(const string& s) {
-    unsigned int hash = 5381;
+    unsigned long hash = 5381;
     for (char c : s) {
-        hash = ((hash << 5) + hash) + c;
+        hash = ((hash << 5) + hash) + (unsigned char)c;
     }
-    return hash % BUCKETS;
+    return (unsigned int)(hash % BUCKETS);
 }
 
 bool file_exists(const char* filename) {
@@ -35,16 +36,16 @@ bool file_exists(const char* filename) {
 
 void init_files() {
     if (!file_exists(INDEX_FILE)) {
-        ofstream idx(INDEX_FILE, ios::binary);
+        FILE* idx = fopen(INDEX_FILE, "wb");
         int val = -1;
         for (int i = 0; i < BUCKETS; ++i) {
-            idx.write(reinterpret_cast<const char*>(&val), sizeof(int));
+            fwrite(&val, sizeof(int), 1, idx);
         }
-        idx.close();
+        fclose(idx);
     }
     if (!file_exists(DATA_FILE)) {
-        ofstream dat(DATA_FILE, ios::binary);
-        dat.close();
+        FILE* dat = fopen(DATA_FILE, "wb");
+        fclose(dat);
     }
 }
 
@@ -57,8 +58,8 @@ int main() {
     int n;
     if (!(cin >> n)) return 0;
 
-    fstream idx_file(INDEX_FILE, ios::binary | ios::in | ios::out);
-    fstream dat_file(DATA_FILE, ios::binary | ios::in | ios::out);
+    FILE* idx_fp = fopen(INDEX_FILE, "rb+");
+    FILE* dat_fp = fopen(DATA_FILE, "rb+");
 
     for (int i = 0; i < n; ++i) {
         string cmd;
@@ -70,15 +71,15 @@ int main() {
             unsigned int h = hash_fn(index);
 
             int head;
-            idx_file.seekg(h * sizeof(int));
-            idx_file.read(reinterpret_cast<char*>(&head), sizeof(int));
+            fseek(idx_fp, h * sizeof(int), SEEK_SET);
+            fread(&head, sizeof(int), 1, idx_fp);
 
             bool exists = false;
             int current_offset = head;
             while (current_offset != -1) {
-                dat_file.seekg(current_offset);
+                fseek(dat_fp, current_offset, SEEK_SET);
                 Entry e;
-                dat_file.read(reinterpret_cast<char*>(&e), sizeof(Entry));
+                fread(&e, sizeof(Entry), 1, dat_fp);
                 if (!e.deleted && strcmp(e.index, index.c_str()) == 0 && e.value == value) {
                     exists = true;
                     break;
@@ -87,19 +88,19 @@ int main() {
             }
 
             if (!exists) {
-                dat_file.seekp(0, ios::end);
-                int new_offset = dat_file.tellp();
+                fseek(dat_fp, 0, SEEK_END);
+                int new_offset = ftell(dat_fp);
                 Entry new_entry;
                 memset(new_entry.index, 0, 64);
                 strncpy(new_entry.index, index.c_str(), 63);
                 new_entry.value = value;
                 new_entry.next_offset = head;
                 new_entry.deleted = false;
-                dat_file.write(reinterpret_cast<const char*>(&new_entry), sizeof(Entry));
+                fwrite(&new_entry, sizeof(Entry), 1, dat_fp);
 
-                idx_file.seekp(h * sizeof(int));
-                idx_file.write(reinterpret_cast<const char*>(&new_offset), sizeof(int));
-                idx_file.flush();
+                fseek(idx_fp, h * sizeof(int), SEEK_SET);
+                fwrite(&new_offset, sizeof(int), 1, idx_fp);
+                fflush(idx_fp);
             }
         } else if (cmd == "delete") {
             string index;
@@ -108,19 +109,19 @@ int main() {
             unsigned int h = hash_fn(index);
 
             int head;
-            idx_file.seekg(h * sizeof(int));
-            idx_file.read(reinterpret_cast<char*>(&head), sizeof(int));
+            fseek(idx_fp, h * sizeof(int), SEEK_SET);
+            fread(&head, sizeof(int), 1, idx_fp);
 
             int current_offset = head;
             while (current_offset != -1) {
-                dat_file.seekg(current_offset);
+                fseek(dat_fp, current_offset, SEEK_SET);
                 Entry e;
-                dat_file.read(reinterpret_cast<char*>(&e), sizeof(Entry));
+                fread(&e, sizeof(Entry), 1, dat_fp);
                 if (!e.deleted && strcmp(e.index, index.c_str()) == 0 && e.value == value) {
                     e.deleted = true;
-                    dat_file.seekp(current_offset);
-                    dat_file.write(reinterpret_cast<const char*>(&e), sizeof(Entry));
-                    dat_file.flush();
+                    fseek(dat_fp, current_offset, SEEK_SET);
+                    fwrite(&e, sizeof(Entry), 1, dat_fp);
+                    fflush(dat_fp);
                     break;
                 }
                 current_offset = e.next_offset;
@@ -131,15 +132,15 @@ int main() {
             unsigned int h = hash_fn(index);
 
             int head;
-            idx_file.seekg(h * sizeof(int));
-            idx_file.read(reinterpret_cast<char*>(&head), sizeof(int));
+            fseek(idx_fp, h * sizeof(int), SEEK_SET);
+            fread(&head, sizeof(int), 1, idx_fp);
 
             vector<int> results;
             int current_offset = head;
             while (current_offset != -1) {
-                dat_file.seekg(current_offset);
+                fseek(dat_fp, current_offset, SEEK_SET);
                 Entry e;
-                dat_file.read(reinterpret_cast<char*>(&e), sizeof(Entry));
+                fread(&e, sizeof(Entry), 1, dat_fp);
                 if (!e.deleted && strcmp(e.index, index.c_str()) == 0) {
                     results.push_back(e.value);
                 }
@@ -158,5 +159,7 @@ int main() {
         }
     }
 
+    fclose(idx_fp);
+    fclose(dat_fp);
     return 0;
 }
